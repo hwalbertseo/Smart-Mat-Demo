@@ -63,6 +63,24 @@ export default function Controls({
       </div>
 
       <div className="control-block">
+        <label htmlFor="angle">Foot angle: {state.angle}°</label>
+        <input
+          id="angle"
+          type="range"
+          min="-90"
+          max="90"
+          step="1"
+          value={state.angle}
+          onChange={(e) =>
+            setState((prev) => ({
+              ...prev,
+              angle: Number(e.target.value),
+            }))
+          }
+        />
+      </div>
+
+      <div className="control-block">
         <label htmlFor="heelPressure">
           Heel pressure: {state.heelPressure.toFixed(0)}
         </label>
@@ -100,11 +118,6 @@ export default function Controls({
             }))
           }
         />
-      </div>
-
-      <div className="status-row">
-        <span>Foot angle</span>
-        <strong>{state.angle}°</strong>
       </div>
 
       <div className="status-row">
@@ -166,6 +179,7 @@ export default function Controls({
         <p>Desktop: hold the mouse button down to simulate an active press.</p>
         <p>Desktop: scroll over the mat to rotate the foot.</p>
         <p>Mobile: drag with your finger to move the foot.</p>
+        <p>Mobile: use the angle slider to rotate the foot.</p>
         <p>Mobile: the foot stays in an active press state automatically.</p>
         <p>The app automatically infers intended and pressed pedal from pose.</p>
         <p>Use heel pressure and vehicle speed sliders to change the input state.</p>

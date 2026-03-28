@@ -86,7 +86,7 @@ export default function MatCanvas({
 
     setState((prev) => ({
       ...prev,
-      angle: ((prev.angle + (delta > 0 ? step : -step)) % 360 + 360) % 360,
+      angle: Math.max(-90, Math.min(90, prev.angle + (delta > 0 ? step : -step))),
     }));
   }
 
@@ -396,7 +396,7 @@ export default function MatCanvas({
             y={392}
             text={
               isTouchPrimary
-                ? "Drag with finger = move foot | Press stays active on mobile"
+                ? "Drag with finger = move foot | Use slider = rotate | Press stays active on mobile"
                 : "Move mouse = reposition foot | Hold click = active press | Scroll = rotate foot"
             }
             fill="#cbd5e1"

@@ -39,11 +39,13 @@ function validateMeta(rawMeta) {
 
 async function loadBundle() {
   if (!bundlePromise) {
+    const base = import.meta.env.BASE_URL;
+
     bundlePromise = Promise.all([
-      ort.InferenceSession.create("/smart_mat.onnx", {
+      ort.InferenceSession.create(`${base}smart_mat.onnx`, {
         executionProviders: ["wasm"],
       }),
-      fetch("/smart_mat_meta.json").then((r) => {
+      fetch(`${base}smart_mat_meta.json`).then((r) => {
         if (!r.ok) {
           throw new Error(`Failed to load smart_mat_meta.json: ${r.status}`);
         }
@@ -135,7 +137,8 @@ export async function predictLogits(inputValue) {
     [1, prepared.length]
   );
 
-  const outputs = await session.run({ input });
+  const inputName = session.inputNames[0];
+  const outputs = await session.run({ [inputName]: input });
   const outputName = Object.keys(outputs)[0];
   return Array.from(outputs[outputName].data);
 }
@@ -150,7 +153,8 @@ export async function predictWithMeta(inputValue) {
     [1, prepared.length]
   );
 
-  const outputs = await session.run({ input });
+  const inputName = session.inputNames[0];
+  const outputs = await session.run({ [inputName]: input });
   const outputName = Object.keys(outputs)[0];
 
   return {

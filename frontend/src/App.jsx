@@ -1,137 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import Controls from "./Controls";
-import MatCanvas from "./MatCanvas";
-import {
-  pedals,
-  clampFootCenter,
-  rectCenter,
-  getFootDimensions,
-} from "./pedalGeometry";
-import { computeFeatures, ruleBasedAssessment } from "./featureExtractor";
-import { loadModel, predictWithMeta } from "./modelRunner";
-
-const INITIAL_STATE = {
-  footX: 235,
-  footY: 230,
-  angle: 0,
-  size: 1.35,
-  heelPressure: 45,
-  carVelocityKph: 0,
-};
-
-const IDLE_ASSESSMENT = {
-  label: "NOT PRESSING",
-  riskScore: 0.0,
-  probs: [1, 0, 0],
-  source: "idle",
-};
-
-const DEFAULT_LABELS = ["SAFE", "RISK", "MISAPPLICATION"];
-
-function softmax(logits) {
-  const maxLogit = Math.max(...logits);
-  const exps = logits.map((value) => Math.exp(value - maxLogit));
-  const sum = exps.reduce((acc, value) => acc + value, 0);
-  return exps.map((value) => value / sum);
-}
-
-function canonicalizeLabel(label) {
-  const v = String(label ?? "").trim().toLowerCase();
-
-  if (v === "safe") return "SAFE";
-  if (v === "risk" || v === "warning" || v === "caution") return "RISK";
-  if (
-    v === "misapplication" ||
-    v === "dangerous" ||
-    v === "danger" ||
-    v === "unsafe"
-  ) {
-    return "MISAPPLICATION";
-  }
-  if (v === "not pressing") return "NOT PRESSING";
-
-  return String(label ?? "SAFE").toUpperCase();
-}
-
-function riskScoreFromProbs(probs, labelNames) {
-  const normalized = labelNames.map(canonicalizeLabel);
-  const riskIndex = normalized.indexOf("RISK");
-  const misIndex = normalized.indexOf("MISAPPLICATION");
-
-  return Math.max(
-    riskIndex >= 0 ? probs[riskIndex] || 0 : 0,
-    misIndex >= 0 ? probs[misIndex] || 0 : 0
-  );
-}
-
-function pointInRectWithPad(x, y, rect, pad = 12) {
-  return (
-    x >= rect.x - pad &&
-    x <= rect.x + rect.width + pad &&
-    y >= rect.y - pad &&
-    y <= rect.y + rect.height + pad
-  );
-}
-
-function inferForefootPoint(state) {
-  const { length } = getFootDimensions(state.size);
-  const rad = (state.angle * Math.PI) / 180;
-
-  return {
-    x: state.footX + Math.sin(rad) * (length * 0.62),
-    y: state.footY - Math.cos(rad) * (length * 0.62),
-  };
-}
-
-function inferPedalState(state, isPressing) {
-  const forefoot = inferForefootPoint(state);
-
-  const brakeCenter = rectCenter(pedals.brake);
-  const accelCenter = rectCenter(pedals.accel);
-
-  const brakeDist = Math.hypot(
-    forefoot.x - brakeCenter.x,
-    forefoot.y - brakeCenter.y
-  );
-  const accelDist = Math.hypot(
-    forefoot.x - accelCenter.x,
-    forefoot.y - accelCenter.y
-  );
-
-  const intendedPedal = brakeDist <= accelDist ? "brake" : "accel";
-
-  let pressedPedal = "none";
-
-  if (isPressing) {
-    const onBrake = pointInRectWithPad(
-      forefoot.x,
-      forefoot.y,
-      pedals.brake,
-      12
-    );
-    const onAccel = pointInRectWithPad(
-      forefoot.x,
-      forefoot.y,
-      pedals.accel,
-      12
-    );
-
-    if (onBrake && !onAccel) pressedPedal = "brake";
-    else if (onAccel && !onBrake) pressedPedal = "accel";
-    else if (onBrake && onAccel) pressedPedal = intendedPedal;
-  }
-
-  return {
-    intendedPedal,
-    pressedPedal,
-    forefootX: forefoot.x,
-    forefootY: forefoot.y,
-  };
+function isTouchPrimaryDevice() {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 }
 
 export default function App() {
   const [state, setState] = useState(INITIAL_STATE);
   const [isPressing, setIsPressing] = useState(false);
+  const [isTouchPrimary, setIsTouchPrimary] = useState(isTouchPrimaryDevice());
   const [modelStatus, setModelStatus] = useState("loading");
   const [assessment, setAssessment] = useState(IDLE_ASSESSMENT);
 
@@ -152,9 +27,25 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const media = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const updateTouchMode = () => setIsTouchPrimary(media.matches);
+
+    updateTouchMode();
+    media.addEventListener?.("change", updateTouchMode);
+
+    return () => {
+      media.removeEventListener?.("change", updateTouchMode);
+    };
+  }, []);
+
+  const pressActive = isTouchPrimary || isPressing;
+
   const inferredPedalState = useMemo(
-    () => inferPedalState(state, isPressing),
-    [state, isPressing]
+    () => inferPedalState(state, pressActive),
+    [state, pressActive]
   );
 
   const effectiveState = useMemo(
@@ -177,7 +68,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
-    if (!isPressing) {
+    if (!pressActive) {
       setAssessment(IDLE_ASSESSMENT);
       return () => {
         active = false;
@@ -230,7 +121,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [featureResult, effectiveState, modelStatus, isPressing]);
+  }, [featureResult, effectiveState, modelStatus, pressActive]);
 
   function resetFoot() {
     const clamped = clampFootCenter(
@@ -246,7 +137,7 @@ export default function App() {
       footY: clamped.y,
     });
     setIsPressing(false);
-    setAssessment(IDLE_ASSESSMENT);
+    setAssessment(isTouchPrimary ? ruleBasedAssessment(featureResult, effectiveState, pedals) : IDLE_ASSESSMENT);
   }
 
   return (
@@ -267,8 +158,9 @@ export default function App() {
           setState={setState}
           assessment={assessment}
           geometry={geometry}
-          isPressing={isPressing}
+          isPressing={pressActive}
           setIsPressing={setIsPressing}
+          isTouchPrimary={isTouchPrimary}
         />
 
         <Controls
@@ -277,7 +169,7 @@ export default function App() {
           onReset={resetFoot}
           assessment={assessment}
           modelStatus={modelStatus}
-          isPressing={isPressing}
+          isPressing={pressActive}
           geometry={geometry}
         />
       </div>
@@ -315,7 +207,7 @@ export default function App() {
 
         <div className="metric">
           <span>Press active</span>
-          <strong>{isPressing ? "YES" : "NO"}</strong>
+          <strong>{pressActive ? "YES" : "NO"}</strong>
         </div>
       </div>
     </div>

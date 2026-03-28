@@ -162,9 +162,11 @@ export default function Controls({
 
       <div className="note-card">
         <h3>How to use</h3>
-        <p>Move the mouse to reposition the foot.</p>
-        <p>Scroll over the mat to rotate the foot.</p>
-        <p>Hold the mouse button down to simulate an active press.</p>
+        <p>Desktop: move the mouse to reposition the foot.</p>
+        <p>Desktop: hold the mouse button down to simulate an active press.</p>
+        <p>Desktop: scroll over the mat to rotate the foot.</p>
+        <p>Mobile: drag with your finger to move the foot.</p>
+        <p>Mobile: the foot stays in an active press state automatically.</p>
         <p>The app automatically infers intended and pressed pedal from pose.</p>
         <p>Use heel pressure and vehicle speed sliders to change the input state.</p>
       </div>

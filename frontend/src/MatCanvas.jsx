@@ -18,6 +18,7 @@ export default function MatCanvas({
   geometry,
   isPressing,
   setIsPressing,
+  isTouchPrimary,
 }) {
   const { length, width } = getFootDimensions(state.size);
 
@@ -37,25 +38,48 @@ export default function MatCanvas({
   }
 
   function handleStageMouseMove(event) {
+    if (isTouchPrimary) return;
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
   }
 
   function handleStageMouseDown(event) {
+    if (isTouchPrimary) return;
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
     setIsPressing(true);
   }
 
   function handleStageMouseUp() {
+    if (isTouchPrimary) return;
     setIsPressing(false);
   }
 
   function handleStageMouseLeave() {
+    if (isTouchPrimary) return;
+    setIsPressing(false);
+  }
+
+  function handleStageTouchStart(event) {
+    event.evt.preventDefault();
+    const stage = event.target.getStage();
+    updateFromStagePointer(stage);
+    setIsPressing(true);
+  }
+
+  function handleStageTouchMove(event) {
+    event.evt.preventDefault();
+    const stage = event.target.getStage();
+    updateFromStagePointer(stage);
+  }
+
+  function handleStageTouchEnd(event) {
+    event.evt.preventDefault();
     setIsPressing(false);
   }
 
   function handleStageWheel(event) {
+    if (isTouchPrimary) return;
     event.evt.preventDefault();
     const delta = event.evt.deltaY;
     const step = 8;
@@ -141,7 +165,7 @@ export default function MatCanvas({
   ];
 
   return (
-    <div className="canvas-shell">
+    <div className="canvas-shell" style={{ touchAction: "none" }}>
       <Stage
         width={STAGE_WIDTH}
         height={STAGE_HEIGHT}
@@ -149,6 +173,9 @@ export default function MatCanvas({
         onMouseDown={handleStageMouseDown}
         onMouseUp={handleStageMouseUp}
         onMouseLeave={handleStageMouseLeave}
+        onTouchStart={handleStageTouchStart}
+        onTouchMove={handleStageTouchMove}
+        onTouchEnd={handleStageTouchEnd}
         onWheel={handleStageWheel}
       >
         <Layer>
@@ -367,7 +394,11 @@ export default function MatCanvas({
           <Text
             x={24}
             y={392}
-            text="Move mouse = reposition foot | Hold click = active press | Scroll = rotate foot"
+            text={
+              isTouchPrimary
+                ? "Drag with finger = move foot | Press stays active on mobile"
+                : "Move mouse = reposition foot | Hold click = active press | Scroll = rotate foot"
+            }
             fill="#cbd5e1"
             fontSize={14}
           />

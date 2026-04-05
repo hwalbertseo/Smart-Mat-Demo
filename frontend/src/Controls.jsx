@@ -1,3 +1,12 @@
+import {
+  t,
+  localizeAssessmentLabel,
+  localizeBoolean,
+  localizeModelStatus,
+  localizePedalLabel,
+  localizeSourceLabel,
+} from "./i18n";
+
 function getAssessmentTone(label) {
   const v = String(label ?? "").toUpperCase();
 
@@ -40,15 +49,19 @@ export default function Controls({
   modelStatus,
   isPressing,
   geometry,
+  lang,
 }) {
   const tone = getAssessmentTone(assessment.label);
+  const tr = (key) => t(lang, key);
 
   return (
     <div className="panel">
-      <h2>Smart Mat Controls</h2>
+      <h2>{tr("controlsTitle")}</h2>
 
       <div className="control-block">
-        <label htmlFor="size">Foot size scale: {state.size.toFixed(2)}</label>
+        <label htmlFor="size">
+          {tr("footSizeScale")}: {state.size.toFixed(2)}
+        </label>
         <input
           id="size"
           type="range"
@@ -63,7 +76,9 @@ export default function Controls({
       </div>
 
       <div className="control-block">
-        <label htmlFor="angle">Foot angle: {state.angle}°</label>
+        <label htmlFor="angle">
+          {tr("footAngle")}: {state.angle}°
+        </label>
         <input
           id="angle"
           type="range"
@@ -82,7 +97,7 @@ export default function Controls({
 
       <div className="control-block">
         <label htmlFor="heelPressure">
-          Heel pressure: {state.heelPressure.toFixed(0)}
+          {tr("heelPressure")}: {state.heelPressure.toFixed(0)}
         </label>
         <input
           id="heelPressure"
@@ -102,7 +117,7 @@ export default function Controls({
 
       <div className="control-block">
         <label htmlFor="carVelocityKph">
-          Vehicle speed: {state.carVelocityKph.toFixed(0)} kph
+          {tr("vehicleSpeed")}: {state.carVelocityKph.toFixed(0)} kph
         </label>
         <input
           id="carVelocityKph"
@@ -121,68 +136,66 @@ export default function Controls({
       </div>
 
       <div className="status-row">
-        <span>Press active</span>
-        <strong>{isPressing ? "YES" : "NO"}</strong>
+        <span>{tr("pressActive")}</span>
+        <strong>{localizeBoolean(lang, isPressing)}</strong>
       </div>
 
       <div className="status-row">
-        <span>Intended pedal</span>
-        <strong>{geometry?.intendedPedal?.toUpperCase?.() ?? "-"}</strong>
+        <span>{tr("intendedPedal")}</span>
+        <strong>
+          {geometry?.intendedPedal
+            ? localizePedalLabel(lang, geometry.intendedPedal)
+            : "-"}
+        </strong>
       </div>
 
       <div className="status-row">
-        <span>Pressed pedal</span>
-        <strong>{geometry?.pressedPedal?.toUpperCase?.() ?? "NONE"}</strong>
+        <span>{tr("pressedPedal")}</span>
+        <strong>
+          {geometry?.pressedPedal
+            ? localizePedalLabel(lang, geometry.pressedPedal)
+            : tr("none")}
+        </strong>
       </div>
 
       <div className="control-block">
         <button className="reset-btn" onClick={onReset}>
-          Reset foot position
+          {tr("resetFootPosition")}
         </button>
       </div>
 
       <div className="status-card">
         <div
-          className={`status-badge ${assessment.label
+          className={`status-badge ${String(assessment.label)
             .toLowerCase()
             .replace(/\s+/g, "-")}`}
           style={tone}
         >
-          {assessment.label}
+          {localizeAssessmentLabel(lang, assessment.label)}
         </div>
-        <p>Risk score: {assessment.riskScore.toFixed(2)}</p>
         <p>
-          Inference source:{" "}
-          <strong>
-            {assessment.source === "model"
-              ? "ONNX model"
-              : assessment.source === "idle"
-              ? "Idle"
-              : "Rule-based fallback"}
-          </strong>
+          {tr("riskScore")}: {assessment.riskScore.toFixed(2)}
         </p>
         <p>
-          Model status:{" "}
-          <strong>
-            {modelStatus === "loaded"
-              ? "loaded"
-              : modelStatus === "fallback"
-              ? "not found / using rules"
-              : "loading..."}
-          </strong>
+          {tr("inferenceSource")}:{" "}
+          <strong>{localizeSourceLabel(lang, assessment.source)}</strong>
+        </p>
+        <p>
+          {tr("modelStatus")}:{" "}
+          <strong>{localizeModelStatus(lang, modelStatus)}</strong>
         </p>
       </div>
 
       <div className="note-card">
-        <h3>How to use</h3>
-        <p>Desktop: move the mouse to reposition the foot.</p>
-        <p>Desktop: hold the mouse button down to simulate an active press.</p>
-        <p>Desktop: scroll over the mat to rotate the foot.</p>
-        <p>Mobile: drag with your finger to move the foot.</p>
-        <p>Mobile: use the angle slider to rotate the foot.</p>
-        <p>Mobile: the foot stays in an active press state automatically.</p>
-        <p>The app automatically infers intended and pressed pedal from pose.</p>
-        <p>Use heel pressure and vehicle speed sliders to change the input state.</p>
+        <h3>{tr("howToUse")}</h3>
+        <p>{tr("desktopMove1")}</p>
+        <p>{tr("desktopMove2")}</p>
+        <p>{tr("desktopMove3")}</p>
+        <p>{tr("mobileMove1")}</p>
+        <p>{tr("mobileMove2")}</p>
+        <p>{tr("mobileMove3")}</p>
+        <p>{tr("inferNote")}</p>
+        <p>{tr("sliderNote")}</p>
       </div>
     </div>
   );

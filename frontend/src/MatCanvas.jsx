@@ -6,6 +6,7 @@ import {
   getFootDimensions,
   clampFootCenter,
 } from "./pedalGeometry";
+import { t, localizePedalLabel } from "./i18n";
 
 function pedalFill(name) {
   return name === "brake" ? "#8b5cf6" : "#0ea5e9";
@@ -19,6 +20,7 @@ export default function MatCanvas({
   isPressing,
   setIsPressing,
   isTouchPrimary,
+  lang,
 }) {
   const { length, width } = getFootDimensions(state.size);
 
@@ -105,15 +107,14 @@ export default function MatCanvas({
 
   const footFill = isPressing ? "#f8e2d1" : "#f4d6c2";
 
-  const intendedLabel =
-    geometry?.intendedPedal != null
-      ? geometry.intendedPedal.toUpperCase()
-      : "UNKNOWN";
+  const intendedLabel = geometry?.intendedPedal
+    ? localizePedalLabel(lang, geometry.intendedPedal)
+    : t(lang, "unknown");
 
   const pressedLabel =
-    geometry?.pressedPedal != null
-      ? geometry.pressedPedal.toUpperCase()
-      : "NONE";
+    geometry?.pressedPedal && geometry.pressedPedal !== "none"
+      ? localizePedalLabel(lang, geometry.pressedPedal)
+      : t(lang, "none");
 
   const heelXMinPx =
     geometry?.heelXMin != null ? geometry.heelXMin * STAGE_WIDTH : null;
@@ -202,7 +203,7 @@ export default function MatCanvas({
           <Text
             x={64}
             y={54}
-            text="Seat side"
+            text={t(lang, "seatSide")}
             fill="#cbd5e1"
             fontSize={18}
             fontStyle="bold"
@@ -211,7 +212,7 @@ export default function MatCanvas({
           <Text
             x={505}
             y={24}
-            text={`Intent: ${intendedLabel}`}
+            text={`${t(lang, "intent")}: ${intendedLabel}`}
             fill="#e2e8f0"
             fontSize={18}
             fontStyle="bold"
@@ -220,7 +221,7 @@ export default function MatCanvas({
           <Text
             x={470}
             y={46}
-            text={`Press: ${pressedLabel}`}
+            text={`${t(lang, "pressed")}: ${pressedLabel}`}
             fill="#cbd5e1"
             fontSize={16}
             fontStyle="bold"
@@ -248,7 +249,7 @@ export default function MatCanvas({
                   y={rect.y - 26}
                   width={rect.width}
                   align="center"
-                  text={rect.label}
+                  text={localizePedalLabel(lang, name)}
                   fill="#e5e7eb"
                   fontSize={16}
                   fontStyle="bold"
@@ -394,18 +395,14 @@ export default function MatCanvas({
           <Text
             x={24}
             y={392}
-            text={
-              isTouchPrimary
-                ? "Drag with finger = move foot | Use slider = rotate | Press stays active on mobile"
-                : "Move mouse = reposition foot | Hold click = active press | Scroll = rotate foot"
-            }
+            text={isTouchPrimary ? t(lang, "moveTouchHelp") : t(lang, "moveMouseHelp")}
             fill="#cbd5e1"
             fontSize={14}
           />
           <Text
             x={24}
             y={412}
-            text="Pink dot = heel anchor | Cyan box/dot = estimated heel contact region"
+            text={t(lang, "heelLegend")}
             fill="#cbd5e1"
             fontSize={14}
           />

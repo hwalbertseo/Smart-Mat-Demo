@@ -9,6 +9,14 @@ import {
 } from "./pedalGeometry";
 import { computeFeatures, ruleBasedAssessment } from "./featureExtractor";
 import { loadModel, predictWithMeta } from "./modelRunner";
+import {
+  t,
+  buildFeedbackText,
+  getModelScoreCaption,
+  localizeAssessmentLabel,
+  localizeBoolean,
+  localizePedalLabel,
+} from "./i18n";
 
 const INITIAL_STATE = {
   footX: 235,
@@ -27,6 +35,15 @@ const IDLE_ASSESSMENT = {
 };
 
 const DEFAULT_LABELS = ["SAFE", "RISK", "MISAPPLICATION"];
+
+function getInitialLanguage() {
+  if (typeof window === "undefined") return "ko";
+
+  const saved = window.localStorage.getItem("solemate_lang");
+  if (saved === "ko" || saved === "en") return saved;
+
+  return window.navigator.language?.startsWith("ko") ? "ko" : "en";
+}
 
 function softmax(logits) {
   const maxLogit = Math.max(...logits);
@@ -175,37 +192,6 @@ function getAssessmentAccent(label) {
   if (v === "RISK") return "#f59e0b";
   if (v === "MISAPPLICATION") return "#ef4444";
   return "#94a3b8";
-}
-
-function buildFeedbackText({ label, pressedPedal, intendedPedal, speed }) {
-  const v = String(label ?? "").toUpperCase();
-  const pressed = String(pressedPedal ?? "none").toLowerCase();
-  const intended = String(intendedPedal ?? "unknown").toLowerCase();
-  const currentSpeed = Number(speed ?? 0);
-
-  if (v === "MISAPPLICATION") {
-    if (pressed === "accel" && intended === "brake") {
-      return currentSpeed > 0
-        ? "Wrong pedal input detected. Release the accelerator and move the foot back toward the brake."
-        : "Wrong pedal input detected. Lift and reposition the foot before moving.";
-    }
-
-    if (pressed === "brake" && intended === "accel") {
-      return "Pedal mismatch detected. Reposition the foot carefully before applying input.";
-    }
-
-    return "Unsafe pedal application detected. Reposition the foot and confirm heel alignment.";
-  }
-
-  if (v === "RISK") {
-    return "Foot posture looks unstable. Adjust heel position and apply pedal input more deliberately.";
-  }
-
-  if (v === "SAFE") {
-    return "Foot placement looks stable and consistent with the intended pedal.";
-  }
-
-  return "Waiting for pedal input.";
 }
 
 function formatMetric(value, digits = 0, fallback = "-") {
@@ -389,10 +375,19 @@ function ScoreCard({ score, label, caption, accent }) {
   );
 }
 
-function AppFootPreview({ state, geometry, assessment }) {
+function AppFootPreview({ state, geometry, assessment, lang }) {
   const { length, width } = getFootDimensions(state.size);
   const forefoot = inferForefootPoint(state);
   const accent = getAssessmentAccent(assessment?.label);
+
+  const intendedText = geometry?.intendedPedal
+    ? localizePedalLabel(lang, geometry.intendedPedal)
+    : t(lang, "unknown");
+
+  const pressedText =
+    geometry?.pressedPedal && geometry.pressedPedal !== "none"
+      ? localizePedalLabel(lang, geometry.pressedPedal)
+      : t(lang, "none");
 
   return (
     <div
@@ -432,7 +427,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           fontWeight="700"
           fontFamily="Arial, sans-serif"
         >
-          Seat
+          {t(lang, "seatSide")}
         </text>
 
         <rect
@@ -454,7 +449,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           textAnchor="middle"
           fontFamily="Arial, sans-serif"
         >
-          Brake
+          {localizePedalLabel(lang, "brake")}
         </text>
 
         <rect
@@ -476,7 +471,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           textAnchor="middle"
           fontFamily="Arial, sans-serif"
         >
-          Accel
+          {localizePedalLabel(lang, "accel")}
         </text>
 
         <text
@@ -488,7 +483,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           textAnchor="end"
           fontFamily="Arial, sans-serif"
         >
-          Intent: {geometry?.intendedPedal?.toUpperCase?.() ?? "-"}
+          {t(lang, "intent")}: {intendedText}
         </text>
         <text
           x="640"
@@ -499,7 +494,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           textAnchor="end"
           fontFamily="Arial, sans-serif"
         >
-          Press: {geometry?.pressedPedal?.toUpperCase?.() ?? "NONE"}
+          {t(lang, "pressed")}: {pressedText}
         </text>
 
         <g transform={`translate(${state.footX} ${state.footY}) rotate(${state.angle})`}>
@@ -540,7 +535,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           fontWeight="500"
           fontFamily="Arial, sans-serif"
         >
-          Pink = heel anchor
+          {t(lang, "pinkLegend")}
         </text>
         <text
           x="190"
@@ -550,7 +545,7 @@ function AppFootPreview({ state, geometry, assessment }) {
           fontWeight="500"
           fontFamily="Arial, sans-serif"
         >
-          Cyan = forefoot estimate
+          {t(lang, "cyanLegend")}
         </text>
       </svg>
     </div>
@@ -558,6 +553,7 @@ function AppFootPreview({ state, geometry, assessment }) {
 }
 
 export default function App() {
+  const [lang, setLang] = useState(getInitialLanguage);
   const [state, setState] = useState(INITIAL_STATE);
   const [isPressing, setIsPressing] = useState(false);
   const [isTouchPrimary, setIsTouchPrimary] = useState(isTouchPrimaryDevice());
@@ -570,6 +566,16 @@ export default function App() {
   });
 
   const lastAlertKeyRef = useRef("");
+  const tr = (key) => t(lang, key);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("solemate_lang", lang);
+    }
+    if (typeof document !== "undefined") {
+      document.title = tr("appTitle");
+    }
+  }, [lang]);
 
   useEffect(() => {
     let active = true;
@@ -706,13 +712,14 @@ export default function App() {
   }, [featureResult, effectiveState, modelStatus, pressActive]);
 
   const feedbackText = useMemo(() => {
-    return buildFeedbackText({
+    return buildFeedbackText(lang, {
       label: assessment?.label,
       pressedPedal: geometry?.pressedPedal,
       intendedPedal: geometry?.intendedPedal,
       speed: features?.car_velocity_kph,
     });
   }, [
+    lang,
     assessment?.label,
     geometry?.pressedPedal,
     geometry?.intendedPedal,
@@ -744,7 +751,9 @@ export default function App() {
           : `${Date.now()}-${Math.random()}`,
       time: nowTimeLabel(),
       label,
-      message: feedbackText,
+      pressedPedal: geometry?.pressedPedal,
+      intendedPedal: geometry?.intendedPedal,
+      speed: features?.car_velocity_kph,
     };
 
     setAlerts((prev) => [nextAlert, ...prev].slice(0, 8));
@@ -755,7 +764,6 @@ export default function App() {
     geometry?.pressedPedal,
     geometry?.intendedPedal,
     features?.car_velocity_kph,
-    feedbackText,
   ]);
 
   function resetFoot() {
@@ -800,22 +808,44 @@ export default function App() {
     return riskPercent;
   }, [assessment, riskPercent]);
 
-  const modelScoreCaption =
-    assessment?.source === "model"
-      ? "Confidence in the current assessment from the ONNX model."
-      : assessment?.source === "rules"
-      ? "Using the rule-based fallback estimate right now."
-      : "The model score will appear when pedal input becomes active.";
+  const modelScoreCaption = getModelScoreCaption(lang, assessment?.source);
 
   return (
     <div className="app-shell">
       <div className="header">
         <div>
-          <h1>Smart Mat Demo</h1>
-          <p>
-            A browser prototype for intention-aware foot placement and pedal
-            misapplication detection.
-          </p>
+          <h1>{tr("appTitle")}</h1>
+          <p>{tr("appSubtitle")}</p>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ color: "#cbd5e1", fontSize: 14 }}>{tr("language")}</span>
+          <button
+            onClick={() => setLang("ko")}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(148,163,184,0.25)",
+              background: lang === "ko" ? "#2563eb" : "#0f172a",
+              color: "#f8fafc",
+              cursor: "pointer",
+            }}
+          >
+            한국어
+          </button>
+          <button
+            onClick={() => setLang("en")}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(148,163,184,0.25)",
+              background: lang === "en" ? "#2563eb" : "#0f172a",
+              color: "#f8fafc",
+              cursor: "pointer",
+            }}
+          >
+            EN
+          </button>
         </div>
       </div>
 
@@ -846,6 +876,7 @@ export default function App() {
               isPressing={pressActive}
               setIsPressing={setIsPressing}
               isTouchPrimary={isTouchPrimary}
+              lang={lang}
             />
           </div>
 
@@ -858,43 +889,52 @@ export default function App() {
               modelStatus={modelStatus}
               isPressing={pressActive}
               geometry={geometry}
+              lang={lang}
             />
           </div>
 
           <div className="metrics-row">
             <div className="metric">
-              <span>Intended pedal</span>
-              <strong>{geometry?.intendedPedal?.toUpperCase?.() ?? "-"}</strong>
+              <span>{tr("intendedPedal")}</span>
+              <strong>
+                {geometry?.intendedPedal
+                  ? localizePedalLabel(lang, geometry.intendedPedal)
+                  : "-"}
+              </strong>
             </div>
 
             <div className="metric">
-              <span>Pressed pedal</span>
-              <strong>{geometry?.pressedPedal?.toUpperCase?.() ?? "NONE"}</strong>
+              <span>{tr("pressedPedal")}</span>
+              <strong>
+                {geometry?.pressedPedal
+                  ? localizePedalLabel(lang, geometry.pressedPedal)
+                  : tr("none")}
+              </strong>
             </div>
 
             <div className="metric">
-              <span>Vehicle speed</span>
+              <span>{tr("vehicleSpeed")}</span>
               <strong>{formatMetric(features?.car_velocity_kph, 0)} kph</strong>
             </div>
 
             <div className="metric">
-              <span>Heel pressure</span>
+              <span>{tr("heelPressure")}</span>
               <strong>{formatMetric(features?.heel_pressure, 0)}</strong>
             </div>
 
             <div className="metric">
-              <span>Heel anchor dx</span>
+              <span>{tr("heelAnchorDx")}</span>
               <strong>{formatMetric(features?.heel_anchor_dx, 3)}</strong>
             </div>
 
             <div className="metric">
-              <span>Heel anchor dy</span>
+              <span>{tr("heelAnchorDy")}</span>
               <strong>{formatMetric(features?.heel_anchor_dy, 3)}</strong>
             </div>
 
             <div className="metric">
-              <span>Press active</span>
-              <strong>{pressActive ? "YES" : "NO"}</strong>
+              <span>{tr("pressActive")}</span>
+              <strong>{localizeBoolean(lang, pressActive)}</strong>
             </div>
           </div>
         </div>
@@ -948,7 +988,7 @@ export default function App() {
                     marginBottom: 4,
                   }}
                 >
-                  Driver App
+                  {tr("driverApp")}
                 </div>
                 <div
                   style={{
@@ -956,7 +996,7 @@ export default function App() {
                     color: "#94a3b8",
                   }}
                 >
-                  Live feedback preview
+                  {tr("liveFeedbackPreview")}
                 </div>
               </div>
 
@@ -967,9 +1007,9 @@ export default function App() {
                   justifyItems: "end",
                 }}
               >
-                <DashboardPill ok={appLinked}>APP LINKED</DashboardPill>
+                <DashboardPill ok={appLinked}>{tr("appLinked")}</DashboardPill>
                 <DashboardPill ok={modelReady}>
-                  {modelReady ? "AI READY" : "RULE MODE"}
+                  {modelReady ? tr("aiReady") : tr("ruleMode")}
                 </DashboardPill>
               </div>
             </div>
@@ -991,7 +1031,7 @@ export default function App() {
                   letterSpacing: "0.04em",
                 }}
               >
-                Current status
+                {tr("currentStatus")}
               </div>
               <div
                 style={{
@@ -1001,7 +1041,7 @@ export default function App() {
                   lineHeight: 1.05,
                 }}
               >
-                {assessment?.label ?? "NOT PRESSING"}
+                {localizeAssessmentLabel(lang, assessment?.label ?? "NOT PRESSING")}
               </div>
               <div
                 style={{
@@ -1016,16 +1056,17 @@ export default function App() {
             <div style={{ display: "grid", gap: 14 }}>
               <ScoreCard
                 score={modelScore}
-                label="Model Score"
+                label={tr("modelScore")}
                 caption={modelScoreCaption}
                 accent={getAssessmentAccent(assessment?.label)}
               />
 
-              <DashboardSection title="Live foot view">
+              <DashboardSection title={tr("liveFootView")}>
                 <AppFootPreview
                   state={state}
                   geometry={geometry}
                   assessment={assessment}
+                  lang={lang}
                 />
               </DashboardSection>
 
@@ -1037,25 +1078,33 @@ export default function App() {
                 }}
               >
                 <DashboardMetric
-                  label="Speed"
+                  label={tr("speed")}
                   value={`${formatMetric(features?.car_velocity_kph, 0)} kph`}
                 />
                 <DashboardMetric
-                  label="Pressed"
-                  value={geometry?.pressedPedal?.toUpperCase?.() ?? "NONE"}
+                  label={tr("pressed")}
+                  value={
+                    geometry?.pressedPedal
+                      ? localizePedalLabel(lang, geometry.pressedPedal)
+                      : tr("none")
+                  }
                 />
                 <DashboardMetric
-                  label="Intent"
-                  value={geometry?.intendedPedal?.toUpperCase?.() ?? "-"}
+                  label={tr("intent")}
+                  value={
+                    geometry?.intendedPedal
+                      ? localizePedalLabel(lang, geometry.intendedPedal)
+                      : "-"
+                  }
                 />
                 <DashboardMetric
-                  label="Risk Score"
+                  label={tr("riskScore")}
                   value={`${riskPercent}/100`}
                   emphasize
                 />
               </div>
 
-              <DashboardSection title="Recommended action">
+              <DashboardSection title={tr("recommendedAction")}>
                 <div
                   style={{
                     fontSize: 14,
@@ -1067,7 +1116,7 @@ export default function App() {
                 </div>
               </DashboardSection>
 
-              <DashboardSection title="Recent alerts">
+              <DashboardSection title={tr("recentAlerts")}>
                 <div
                   style={{
                     display: "grid",
@@ -1083,7 +1132,7 @@ export default function App() {
                         color: "#94a3b8",
                       }}
                     >
-                      No risk events logged yet.
+                      {tr("noRiskEvents")}
                     </div>
                   ) : (
                     alerts.map((alert) => {
@@ -1108,7 +1157,7 @@ export default function App() {
                             }}
                           >
                             <strong style={{ fontSize: 13 }}>
-                              {alert.label}
+                              {localizeAssessmentLabel(lang, alert.label)}
                             </strong>
                             <span
                               style={{
@@ -1126,7 +1175,12 @@ export default function App() {
                               lineHeight: 1.45,
                             }}
                           >
-                            {alert.message}
+                            {buildFeedbackText(lang, {
+                              label: alert.label,
+                              pressedPedal: alert.pressedPedal,
+                              intendedPedal: alert.intendedPedal,
+                              speed: alert.speed,
+                            })}
                           </div>
                         </div>
                       );

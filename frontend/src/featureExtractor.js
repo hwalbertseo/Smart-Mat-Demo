@@ -1,122 +1,185 @@
 import {
   STAGE_WIDTH,
   STAGE_HEIGHT,
+  clamp,
   getFootDimensions,
-  getHeelAnchorTarget,
+  normalizeX,
+  normalizeY,
 } from "./pedalGeometry";
 
-const INTENDED_MAP = { brake: 0, accel: 1 };
-const PRESSED_STATE_MAP = { none: 0, brake: 1, accel: 2 };
+export const FEATURE_NAMES = [
+  "heel_x_min",
+  "heel_x_max",
+  "heel_y_min",
+  "heel_y_max",
+  "heel_center_x",
+  "heel_center_y",
+  "heel_width",
+  "heel_height",
+  "heel_area",
+  "heel_pressure",
+  "brake_pressed",
+  "accel_pressed",
+  "car_velocity_kph",
+  "heel_anchor_dx",
+  "heel_anchor_dy",
+  "heel_motion_mag",
+  "heel_lateral_offset",
+  "heel_brake_side_bias",
+  "heel_accel_side_bias",
+  "pressure_velocity",
+  "intended_is_brake",
+  "intended_is_accel",
+  "actual_is_none",
+  "intended_pressed_match",
+  "intended_pedal_code",
+  "pressed_state_code",
+];
 
-function clamp(value, lo, hi) {
-  return Math.max(lo, Math.min(hi, value));
-}
+// These constants match your synthetic data generator.
+const TRAINING_PEDALS = {
+  brake: {
+    cx: 0.32,
+    cy: 0.44,
+    w: 0.13,
+    h: 0.28,
+    heel_target_y: 0.83,
+  },
+  accel: {
+    cx: 0.73,
+    cy: 0.46,
+    w: 0.08,
+    h: 0.32,
+    heel_target_y: 0.84,
+  },
+};
 
-function clamp01(value) {
-  return clamp(value, 0, 1);
-}
+const TRAINING_HEEL_ANCHOR = {
+  x:
+    0.68 * TRAINING_PEDALS.brake.cx +
+    0.32 * TRAINING_PEDALS.accel.cx,
+  y:
+    (TRAINING_PEDALS.brake.heel_target_y +
+      TRAINING_PEDALS.accel.heel_target_y) /
+    2,
+};
 
-function normalizeX(px) {
-  return clamp01(px / STAGE_WIDTH);
-}
-
-function normalizeY(py) {
-  return clamp01(py / STAGE_HEIGHT);
-}
-
-function estimateHeelPatch(state) {
-  const heelCenterXPx = state.footX;
-  const heelCenterYPx = state.footY;
-
-  const { length, width } = getFootDimensions(state.size ?? 1.0);
-
-  const heelBoxWidthPx = width * 0.95;
-  const heelBoxHeightPx = length * 0.22;
-
-  const heelXMin = normalizeX(heelCenterXPx - heelBoxWidthPx / 2);
-  const heelXMax = normalizeX(heelCenterXPx + heelBoxWidthPx / 2);
-  const heelYMin = normalizeY(heelCenterYPx - heelBoxHeightPx / 2);
-  const heelYMax = normalizeY(heelCenterYPx + heelBoxHeightPx / 2);
+function inferForefootPoint(state) {
+  const { length } = getFootDimensions(state.size);
+  const rad = ((Number(state.angle) || 0) * Math.PI) / 180;
 
   return {
-    heelCenterX: normalizeX(heelCenterXPx),
-    heelCenterY: normalizeY(heelCenterYPx),
-    heelXMin,
-    heelXMax,
-    heelYMin,
-    heelYMax,
-    heelWidth: heelXMax - heelXMin,
-    heelHeight: heelYMax - heelYMin,
-    heelArea: (heelXMax - heelXMin) * (heelYMax - heelYMin),
+    x: state.footX + Math.sin(rad) * (length * 0.62),
+    y: state.footY - Math.cos(rad) * (length * 0.62),
   };
 }
 
-function buildHeelAnchor(state, pedals) {
-  const anchor = getHeelAnchorTarget(state.size ?? 1.0, pedals);
-
-  return {
-    brakeX: anchor.brakeCenterX / STAGE_WIDTH,
-    accelX: anchor.accelCenterX / STAGE_WIDTH,
-    betweenPedalsCenter: anchor.betweenPedalsCenterX / STAGE_WIDTH,
-    heelAnchorX: anchor.normalizedX,
-    heelAnchorY: anchor.normalizedY,
-  };
+function normalizedDistanceToRect(point, rect) {
+  const closestX = clamp(point.x, rect.x, rect.x + rect.width);
+  const closestY = clamp(point.y, rect.y, rect.y + rect.height);
+  return Math.hypot(point.x - closestX, point.y - closestY) /
+    Math.hypot(STAGE_WIDTH, STAGE_HEIGHT);
 }
 
-function pressedPedalToBinary(pressedPedal) {
-  return {
-    brakePressed: pressedPedal === "brake" ? 1 : 0,
-    accelPressed: pressedPedal === "accel" ? 1 : 0,
-  };
+function pointInRectScore(point, rect, pad = 36) {
+  const closestX = clamp(point.x, rect.x, rect.x + rect.width);
+  const closestY = clamp(point.y, rect.y, rect.y + rect.height);
+  const d = Math.hypot(point.x - closestX, point.y - closestY);
+
+  if (
+    point.x >= rect.x &&
+    point.x <= rect.x + rect.width &&
+    point.y >= rect.y &&
+    point.y <= rect.y + rect.height
+  ) {
+    return 1;
+  }
+
+  return clamp(1 - d / pad, 0, 1);
 }
 
-function buildFeatureObject(state, pedals) {
-  const intendedPedal = state.intendedPedal === "accel" ? "accel" : "brake";
-  const pressedPedal =
-    state.pressedPedal === "brake" || state.pressedPedal === "accel"
-      ? state.pressedPedal
-      : "none";
+function buildVector(features) {
+  return FEATURE_NAMES.map((name) => {
+    const value = features[name];
 
-  const velocity = Math.max(
-    0,
-    Number(state.carVelocityKph ?? state.carVelocity ?? 0)
-  );
-  const heelPressure = clamp(Number(state.heelPressure ?? 45), 0, 100);
+    if (typeof value === "string") {
+      if (value === "brake") return 0;
+      if (value === "accel") return 1;
+      if (value === "none") return 0;
+      return 0;
+    }
 
-  const heel = estimateHeelPatch(state);
-  const anchor = buildHeelAnchor(state, pedals);
-  const { brakePressed, accelPressed } = pressedPedalToBinary(pressedPedal);
+    return Number(value ?? 0);
+  });
+}
 
-  const heelAnchorDx = heel.heelCenterX - anchor.heelAnchorX;
-  const heelAnchorDy = heel.heelCenterY - anchor.heelAnchorY;
-  const heelMotionMag = Math.hypot(heelAnchorDx, heelAnchorDy);
-  const heelLateralOffset = heel.heelCenterX - anchor.betweenPedalsCenter;
-  const heelBrakeSideBias = heel.heelCenterX - anchor.brakeX;
-  const heelAccelSideBias = heel.heelCenterX - anchor.accelX;
-  const pressureVelocity = heelPressure * velocity;
+export function computeFeatures(state, pedals) {
+  const forefoot = inferForefootPoint(state);
+
+  const heelCenterX = normalizeX(Number(state.footX) || 0);
+  const heelCenterY = normalizeY(Number(state.footY) || 0);
+
+  // Match generator-style heel box:
+  // width around 0.10, height around 0.07.
+  // We let foot size slightly affect it, but keep it near training distribution.
+  const safeSize = Number(state.size) || 1.35;
+  const heelWidth = clamp(0.1 * (safeSize / 1.35), 0.06, 0.16);
+  const heelHeight = clamp(0.07 * (safeSize / 1.35), 0.04, 0.12);
+
+  const heelXMin = clamp(heelCenterX - heelWidth / 2, 0, 1);
+  const heelXMax = clamp(heelCenterX + heelWidth / 2, 0, 1);
+  const heelYMin = clamp(heelCenterY - heelHeight / 2, 0, 1);
+  const heelYMax = clamp(heelCenterY + heelHeight / 2, 0, 1);
+
+  const heelArea = heelWidth * heelHeight;
+
+  const intendedPedal = state.intendedPedal ?? "brake";
+  const pressedPedal = state.pressedPedal ?? "none";
+
+  const brakePressed = pressedPedal === "brake" ? 1 : 0;
+  const accelPressed = pressedPedal === "accel" ? 1 : 0;
+  const actualIsNone = pressedPedal === "none" ? 1 : 0;
+
   const intendedIsBrake = intendedPedal === "brake" ? 1 : 0;
   const intendedIsAccel = intendedPedal === "accel" ? 1 : 0;
-  const actualIsNone = pressedPedal === "none" ? 1 : 0;
-  const intendedPressedMatch =
-    (intendedPedal === "brake" && brakePressed === 1) ||
-    (intendedPedal === "accel" && accelPressed === 1)
-      ? 1
-      : 0;
 
-  return {
-    heel_x_min: heel.heelXMin,
-    heel_x_max: heel.heelXMax,
-    heel_y_min: heel.heelYMin,
-    heel_y_max: heel.heelYMax,
-    heel_center_x: heel.heelCenterX,
-    heel_center_y: heel.heelCenterY,
-    heel_width: heel.heelWidth,
-    heel_height: heel.heelHeight,
-    heel_area: heel.heelArea,
+  const intendedPressedMatch =
+    pressedPedal !== "none" && pressedPedal === intendedPedal ? 1 : 0;
+
+  // Critical: these must be signed raw normalized differences,
+  // NOT normalizeX/normalizeY, because the model was trained on signed dx/dy.
+  const heelAnchorDx = heelCenterX - TRAINING_HEEL_ANCHOR.x;
+  const heelAnchorDy = heelCenterY - TRAINING_HEEL_ANCHOR.y;
+
+  const heelMotionMag = Math.hypot(heelAnchorDx, heelAnchorDy);
+
+  // Likely derived features from your training pipeline.
+  // These keep values in the same small, raw normalized scale.
+  const heelLateralOffset = heelAnchorDx;
+  const heelBrakeSideBias = Math.max(0, -heelAnchorDx);
+  const heelAccelSideBias = Math.max(0, heelAnchorDx);
+
+  const heelPressure = Number(state.heelPressure) || 0;
+  const carVelocityKph = Number(state.carVelocityKph) || 0;
+  const pressureVelocity = heelPressure * carVelocityKph;
+
+  const brakeOverlap = pointInRectScore(forefoot, pedals.brake);
+  const accelOverlap = pointInRectScore(forefoot, pedals.accel);
+
+  const features = {
+    heel_x_min: heelXMin,
+    heel_x_max: heelXMax,
+    heel_y_min: heelYMin,
+    heel_y_max: heelYMax,
+    heel_center_x: heelCenterX,
+    heel_center_y: heelCenterY,
+    heel_width: heelWidth,
+    heel_height: heelHeight,
+    heel_area: heelArea,
     heel_pressure: heelPressure,
     brake_pressed: brakePressed,
     accel_pressed: accelPressed,
-    car_velocity_kph: velocity,
+    car_velocity_kph: carVelocityKph,
     heel_anchor_dx: heelAnchorDx,
     heel_anchor_dy: heelAnchorDy,
     heel_motion_mag: heelMotionMag,
@@ -128,117 +191,94 @@ function buildFeatureObject(state, pedals) {
     intended_is_accel: intendedIsAccel,
     actual_is_none: actualIsNone,
     intended_pressed_match: intendedPressedMatch,
-    intended_pedal_code: INTENDED_MAP[intendedPedal],
-    pressed_state_code: PRESSED_STATE_MAP[pressedPedal],
+
+    // Categorical raw values. modelRunner.js will encode these using metadata maps.
+    intended_pedal_code: intendedPedal,
+    pressed_state_code: pressedPedal,
+
+    // Backward-compatible aliases for UI/rule-based fallback.
+    heel_x: heelCenterX,
+    heel_y: heelCenterY,
+    forefoot_x: normalizeX(forefoot.x),
+    forefoot_y: normalizeY(forefoot.y),
+    foot_angle_deg: Number(state.angle) || 0,
+    foot_size: safeSize,
+    brake_overlap: brakeOverlap,
+    accel_overlap: accelOverlap,
+    brake_distance: normalizedDistanceToRect(forefoot, pedals.brake),
+    accel_distance: normalizedDistanceToRect(forefoot, pedals.accel),
+    intended_brake: intendedIsBrake,
+    intended_accel: intendedIsAccel,
+    pressed_brake: brakePressed,
+    pressed_accel: accelPressed,
+    intended_pedal: intendedPedal,
+    pressed_state: pressedPedal,
+    pressed_pedal: pressedPedal,
   };
-}
 
-export function computeFeatures(state, pedals) {
-  const features = buildFeatureObject(state, pedals);
-
-  const vector = [
-    features.heel_x_min,
-    features.heel_x_max,
-    features.heel_y_min,
-    features.heel_y_max,
-    features.heel_center_x,
-    features.heel_center_y,
-    features.heel_width,
-    features.heel_height,
-    features.heel_area,
-    features.heel_pressure,
-    features.brake_pressed,
-    features.accel_pressed,
-    features.car_velocity_kph,
-    features.heel_anchor_dx,
-    features.heel_anchor_dy,
-    features.heel_motion_mag,
-    features.heel_lateral_offset,
-    features.heel_brake_side_bias,
-    features.heel_accel_side_bias,
-    features.pressure_velocity,
-    features.intended_is_brake,
-    features.intended_is_accel,
-    features.actual_is_none,
-    features.intended_pressed_match,
-    features.intended_pedal_code,
-    features.pressed_state_code,
-  ];
+  const geometry = {
+    intendedPedal,
+    pressedPedal,
+    forefootX: forefoot.x,
+    forefootY: forefoot.y,
+    heelCenterX,
+    heelCenterY,
+    heelAnchorX: TRAINING_HEEL_ANCHOR.x,
+    heelAnchorY: TRAINING_HEEL_ANCHOR.y,
+    heelXMin,
+    heelXMax,
+    heelYMin,
+    heelYMax,
+  };
 
   return {
-    vector,
     features,
-    geometry: {
-      heelCenterX: features.heel_center_x,
-      heelCenterY: features.heel_center_y,
-      heelXMin: features.heel_x_min,
-      heelXMax: features.heel_x_max,
-      heelYMin: features.heel_y_min,
-      heelYMax: features.heel_y_max,
-      heelAnchorX: features.heel_center_x - features.heel_anchor_dx,
-      heelAnchorY: features.heel_center_y - features.heel_anchor_dy,
-      brakePressed: features.brake_pressed,
-      accelPressed: features.accel_pressed,
-      pressedPedal:
-        features.pressed_state_code === PRESSED_STATE_MAP.brake
-          ? "brake"
-          : features.pressed_state_code === PRESSED_STATE_MAP.accel
-          ? "accel"
-          : "none",
-      intendedPedal:
-        features.intended_pedal_code === INTENDED_MAP.accel
-          ? "accel"
-          : "brake",
-    },
+    geometry,
+    vector: buildVector(features),
+    featureNames: FEATURE_NAMES,
   };
 }
 
-export function ruleBasedAssessment(featureResult, state, pedals) {
-  const { features, geometry } = featureResult;
+export function ruleBasedAssessment(featureResult) {
+  const features = featureResult.features;
+  const geometry = featureResult.geometry;
+
+  const speed = Number(features.car_velocity_kph) || 0;
+  const heelPressure = Number(features.heel_pressure) || 0;
+
   const intended = geometry.intendedPedal;
-  const pressedPedal = geometry.pressedPedal;
+  const pressed = geometry.pressedPedal;
 
-  const heelXError = Math.abs(features.heel_anchor_dx);
-  const heelYError = Math.abs(features.heel_anchor_dy);
-  const velocityNorm = clamp(features.car_velocity_kph / 80, 0, 1.5);
+  const isPressingPedal = pressed === "brake" || pressed === "accel";
+  const mismatch = isPressingPedal && intended !== pressed;
 
-  const heelOutsidePedalLane =
-    features.heel_center_x < geometry.heelAnchorX - 0.22 ||
-    features.heel_center_x > geometry.heelAnchorX + 0.38;
+  const fastVehicle = speed >= 20;
+  const veryFastVehicle = speed >= 45;
 
-  const wrongPedal = pressedPedal !== "none" && pressedPedal !== intended;
-  const noPedalWhileMoving =
-    pressedPedal === "none" && features.car_velocity_kph > 8;
+  const unstableHeel =
+    Math.abs(features.heel_anchor_dx) > 0.07 ||
+    Math.abs(features.heel_anchor_dy) > 0.09 ||
+    heelPressure < 18;
 
-  let riskScore = 0;
-  riskScore += Math.max(0, heelXError - 0.03) * 7.5;
-  riskScore += Math.max(0, heelYError - 0.04) * 5.5;
-  riskScore += Math.max(0, features.heel_motion_mag - 0.06) * 4.0;
-  riskScore += Math.max(0, Math.abs(features.heel_lateral_offset) - 0.12) * 3.5;
-  riskScore += velocityNorm * 0.25;
+  const accelPressedWhenBrakeIntended =
+    intended === "brake" && pressed === "accel";
 
-  if (heelOutsidePedalLane) riskScore += 0.8;
-  if (noPedalWhileMoving) riskScore += 0.35;
+  let riskScore = 0.05;
 
-  if (wrongPedal) {
-    riskScore +=
-      intended === "brake" ? 2.8 + 0.5 * velocityNorm : 2.2 + 0.35 * velocityNorm;
-  }
+  if (!isPressingPedal) riskScore += 0.1;
+  if (unstableHeel) riskScore += 0.22;
+  if (fastVehicle) riskScore += 0.14;
+  if (veryFastVehicle) riskScore += 0.12;
+  if (mismatch) riskScore += 0.38;
+  if (accelPressedWhenBrakeIntended) riskScore += 0.22;
 
-  if (
-    intended === "brake" &&
-    pressedPedal === "accel" &&
-    features.car_velocity_kph > 20
-  ) {
-    riskScore += 0.9;
-  }
-
-  riskScore = clamp01(riskScore / 3.6);
+  riskScore = clamp(riskScore, 0, 1);
 
   let label = "SAFE";
-  if (wrongPedal || riskScore >= 0.82) {
+
+  if (riskScore >= 0.72 || accelPressedWhenBrakeIntended) {
     label = "MISAPPLICATION";
-  } else if (riskScore >= 0.35) {
+  } else if (riskScore >= 0.38 || mismatch || unstableHeel) {
     label = "RISK";
   }
 
@@ -247,10 +287,10 @@ export function ruleBasedAssessment(featureResult, state, pedals) {
     riskScore,
     probs:
       label === "SAFE"
-        ? [0.84, 0.12, 0.04]
+        ? [1 - riskScore, riskScore * 0.75, riskScore * 0.25]
         : label === "RISK"
-        ? [0.15, 0.70, 0.15]
-        : [0.03, 0.10, 0.87],
+        ? [0.2, Math.max(0.55, riskScore), 0.25]
+        : [0.08, 0.2, Math.max(0.72, riskScore)],
     source: "rules",
   };
 }

@@ -5,8 +5,8 @@ import {
   pedals,
   getFootDimensions,
   clampFootCenter,
-} from "./pedalGeometry";
-import { t, localizePedalLabel } from "./i18n";
+} from "../pedalGeometry";
+import { t, localizePedalLabel } from "../i18n";
 
 function pedalFill(name) {
   return name === "brake" ? "#8b5cf6" : "#0ea5e9";
@@ -26,6 +26,7 @@ export default function MatCanvas({
 
   function moveFootTo(x, y) {
     const clamped = clampFootCenter(x, y, state.size, state.angle);
+
     setState((prev) => ({
       ...prev,
       footX: clamped.x,
@@ -36,17 +37,20 @@ export default function MatCanvas({
   function updateFromStagePointer(stage) {
     const pointer = stage?.getPointerPosition();
     if (!pointer) return;
+
     moveFootTo(pointer.x, pointer.y);
   }
 
   function handleStageMouseMove(event) {
     if (isTouchPrimary) return;
+
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
   }
 
   function handleStageMouseDown(event) {
     if (isTouchPrimary) return;
+
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
     setIsPressing(true);
@@ -64,6 +68,7 @@ export default function MatCanvas({
 
   function handleStageTouchStart(event) {
     event.evt.preventDefault();
+
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
     setIsPressing(true);
@@ -71,6 +76,7 @@ export default function MatCanvas({
 
   function handleStageTouchMove(event) {
     event.evt.preventDefault();
+
     const stage = event.target.getStage();
     updateFromStagePointer(stage);
   }
@@ -82,13 +88,18 @@ export default function MatCanvas({
 
   function handleStageWheel(event) {
     if (isTouchPrimary) return;
+
     event.evt.preventDefault();
+
     const delta = event.evt.deltaY;
     const step = 8;
 
     setState((prev) => ({
       ...prev,
-      angle: Math.max(-90, Math.min(90, prev.angle + (delta > 0 ? step : -step))),
+      angle: Math.max(
+        -90,
+        Math.min(90, prev.angle + (delta > 0 ? step : -step))
+      ),
     }));
   }
 
@@ -135,8 +146,8 @@ export default function MatCanvas({
   const heelAnchorYPx =
     geometry?.heelAnchorY != null ? geometry.heelAnchorY * STAGE_HEIGHT : null;
 
-  const heelHalfW = width * 0.30;
-  const archHalfW = width * 0.20;
+  const heelHalfW = width * 0.3;
+  const archHalfW = width * 0.2;
   const ballHalfW = width * 0.34;
   const toeHalfW = width * 0.24;
 
@@ -150,11 +161,11 @@ export default function MatCanvas({
     -ballHalfW,
     -length * 0.72,
     -toeHalfW * 0.95,
-    -length * 0.90,
+    -length * 0.9,
     0,
     -length,
     toeHalfW * 0.95,
-    -length * 0.90,
+    -length * 0.9,
     ballHalfW,
     -length * 0.72,
     archHalfW,
@@ -200,6 +211,7 @@ export default function MatCanvas({
             fill="#111827"
             opacity={0.55}
           />
+
           <Text
             x={64}
             y={54}
@@ -241,9 +253,12 @@ export default function MatCanvas({
                   cornerRadius={18}
                   fill={pedalFill(name)}
                   opacity={isPressed ? 0.72 : 0.45}
-                  stroke={isPressed ? "#f8fafc" : isIntended ? "#fde68a" : "#e5e7eb"}
+                  stroke={
+                    isPressed ? "#f8fafc" : isIntended ? "#fde68a" : "#e5e7eb"
+                  }
                   strokeWidth={isPressed ? 4 : isIntended ? 3 : 2}
                 />
+
                 <Text
                   x={rect.x}
                   y={rect.y - 26}
@@ -339,7 +354,7 @@ export default function MatCanvas({
                 y={-length * 0.73}
                 radius={width * 0.18}
                 fill="#efc8b3"
-                opacity={0.30}
+                opacity={0.3}
               />
 
               <Circle
@@ -350,6 +365,7 @@ export default function MatCanvas({
                 stroke={footOutlineColor}
                 strokeWidth={2}
               />
+
               <Circle
                 x={-width * 0.07}
                 y={-length * 0.965}
@@ -358,6 +374,7 @@ export default function MatCanvas({
                 stroke={footOutlineColor}
                 strokeWidth={2}
               />
+
               <Circle
                 x={width * 0.02}
                 y={-length * 0.98}
@@ -366,6 +383,7 @@ export default function MatCanvas({
                 stroke={footOutlineColor}
                 strokeWidth={2}
               />
+
               <Circle
                 x={width * 0.12}
                 y={-length * 0.95}
@@ -374,9 +392,10 @@ export default function MatCanvas({
                 stroke={footOutlineColor}
                 strokeWidth={2}
               />
+
               <Circle
-                x={width * 0.20}
-                y={-length * 0.90}
+                x={width * 0.2}
+                y={-length * 0.9}
                 radius={width * 0.062}
                 fill="#f8e2d1"
                 stroke={footOutlineColor}
@@ -395,10 +414,15 @@ export default function MatCanvas({
           <Text
             x={24}
             y={392}
-            text={isTouchPrimary ? t(lang, "moveTouchHelp") : t(lang, "moveMouseHelp")}
+            text={
+              isTouchPrimary
+                ? t(lang, "moveTouchHelp")
+                : t(lang, "moveMouseHelp")
+            }
             fill="#cbd5e1"
             fontSize={14}
           />
+
           <Text
             x={24}
             y={412}

@@ -5,7 +5,7 @@ import {
   localizeModelStatus,
   localizePedalLabel,
   localizeSourceLabel,
-} from "./i18n";
+} from "../i18n";
 
 function getAssessmentTone(label) {
   const v = String(label ?? "").toUpperCase();
@@ -70,7 +70,10 @@ export default function Controls({
           step="0.01"
           value={state.size}
           onChange={(e) =>
-            setState((prev) => ({ ...prev, size: Number(e.target.value) }))
+            setState((prev) => ({
+              ...prev,
+              size: Number(e.target.value),
+            }))
           }
         />
       </div>
@@ -173,13 +176,16 @@ export default function Controls({
         >
           {localizeAssessmentLabel(lang, assessment.label)}
         </div>
+
         <p>
           {tr("riskScore")}: {assessment.riskScore.toFixed(2)}
         </p>
+
         <p>
           {tr("inferenceSource")}:{" "}
           <strong>{localizeSourceLabel(lang, assessment.source)}</strong>
         </p>
+
         <p>
           {tr("modelStatus")}:{" "}
           <strong>{localizeModelStatus(lang, modelStatus)}</strong>

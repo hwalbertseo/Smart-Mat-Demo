@@ -3,31 +3,18 @@ export const STAGE_HEIGHT = 450;
 
 export const pedals = {
   brake: {
-    label: "Brake",
-    x: 190,
-    y: 118,
-    width: 95,
-    height: 158,
+    x: 210,
+    y: 105,
+    width: 105,
+    height: 165,
   },
   accel: {
-    label: "Accel",
     x: 400,
-    y: 126,
-    width: 72,
-    height: 176,
+    y: 125,
+    width: 68,
+    height: 185,
   },
 };
-
-function clamp(value, lo, hi) {
-  return Math.max(lo, Math.min(hi, value));
-}
-
-export function getFootDimensions(size = 1.0) {
-  return {
-    length: 140 * size,
-    width: 54 * size,
-  };
-}
 
 export function rectCenter(rect) {
   return {
@@ -36,83 +23,38 @@ export function rectCenter(rect) {
   };
 }
 
-export function rectBottom(rect) {
-  return rect.y + rect.height;
-}
+export function getFootDimensions(size = 1.25) {
+  const safeSize = Math.max(1, Math.min(1.5, Number(size) || 1.25));
 
-export function getPedalCenters(layout = pedals) {
   return {
-    brake: rectCenter(layout.brake),
-    accel: rectCenter(layout.accel),
+    length: 160 * safeSize,
+    width: 58 * safeSize,
   };
 }
 
-export function getHeelAnchorTarget(size = 1.0, layout = pedals) {
-  const centers = getPedalCenters(layout);
-  const brakeCenter = centers.brake;
-  const accelCenter = centers.accel;
-
-  const brakeBottom = rectBottom(layout.brake);
-  const accelBottom = rectBottom(layout.accel);
-
-  const { length } = getFootDimensions(size);
-  const pedalGap = accelCenter.x - brakeCenter.x;
-
-  // Still between the pedals, but not as brake-biased as before.
-  const heelAnchorX = brakeCenter.x + pedalGap * 0.43;
-
-  const anchorYOffset = clamp(length * 0.22, 40, 56);
-  const heelAnchorY = clamp(
-    Math.max(brakeBottom, accelBottom) + anchorYOffset,
-    Math.max(brakeBottom, accelBottom) + 26,
-    STAGE_HEIGHT - 28
-  );
-
-  return {
-    x: heelAnchorX,
-    y: heelAnchorY,
-    normalizedX: heelAnchorX / STAGE_WIDTH,
-    normalizedY: heelAnchorY / STAGE_HEIGHT,
-    betweenPedalsCenterX: (brakeCenter.x + accelCenter.x) / 2,
-    brakeCenterX: brakeCenter.x,
-    accelCenterX: accelCenter.x,
-  };
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-export function getRecommendedFootStart(size = 1.0, layout = pedals) {
-  const anchor = getHeelAnchorTarget(size, layout);
-  return clampFootCenter(anchor.x, anchor.y, size, 0);
-}
-
-export function clampFootCenter(x, y, size = 1.0, angle = 0) {
+export function clampFootCenter(x, y, size = 1.25, angle = 0) {
   const { length, width } = getFootDimensions(size);
-  const rad = (angle * Math.PI) / 180;
 
-  const localPoints = [
-    [-width * 0.30, 0],
-    [width * 0.30, 0],
-    [-width * 0.20, -length * 0.34],
-    [width * 0.20, -length * 0.34],
-    [-width * 0.34, -length * 0.72],
-    [width * 0.34, -length * 0.72],
-    [-width * 0.24, -length * 0.90],
-    [width * 0.24, -length * 0.90],
-    [0, -length],
-  ];
-
-  const rotated = localPoints.map(([px, py]) => {
-    const rx = px * Math.cos(rad) - py * Math.sin(rad);
-    const ry = px * Math.sin(rad) + py * Math.cos(rad);
-    return { x: rx, y: ry };
-  });
-
-  const minX = Math.min(...rotated.map((p) => p.x));
-  const maxX = Math.max(...rotated.map((p) => p.x));
-  const minY = Math.min(...rotated.map((p) => p.y));
-  const maxY = Math.max(...rotated.map((p) => p.y));
+  const margin = Math.max(length, width) * 0.52;
 
   return {
-    x: clamp(x, -minX, STAGE_WIDTH - maxX),
-    y: clamp(y, -minY, STAGE_HEIGHT - maxY),
+    x: clamp(x, margin, STAGE_WIDTH - margin),
+    y: clamp(y, margin, STAGE_HEIGHT - 24),
   };
+}
+
+export function normalizeX(x) {
+  return clamp(x / STAGE_WIDTH, 0, 1);
+}
+
+export function normalizeY(y) {
+  return clamp(y / STAGE_HEIGHT, 0, 1);
+}
+
+export function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }

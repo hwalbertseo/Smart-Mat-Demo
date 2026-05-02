@@ -4,7 +4,7 @@ import SpeedometerGauge from "../components/SpeedometerGauge";
 import SessionList from "../components/SessionList";
 import SessionDetailModal from "../components/SessionDetailModal";
 import AccountPanel from "../components/AccountPanel";
-import { demoAccount } from "../data/demoAccount";
+import { demoAccounts } from "../data/demoAccount";
 import { demoSessions } from "../data/demoSessions";
 import {
   averageScore,
@@ -13,6 +13,7 @@ import {
   localizedList,
 } from "../utils/sessionUtils";
 import { t } from "../i18n";
+
 
 function InfoCard({ title, children, action }) {
   return (
@@ -416,6 +417,14 @@ function LogTab({ sessions, onSelect, lang }) {
 export default function AppDemoPage({ lang = "en" }) {
   const [activeTab, setActiveTab] = useState("home");
   const [selectedSession, setSelectedSession] = useState(null);
+  const [selectedAccountId, setSelectedAccountId] = useState(demoAccounts[0].id);
+
+  const selectedAccount =
+    demoAccounts.find((account) => account.id === selectedAccountId) ?? demoAccounts[0];
+
+  const filteredSessions = useMemo(() => {
+    return demoSessions.filter((session) => session.accountId === selectedAccountId);
+  }, [selectedAccountId]);
 
   const title = useMemo(() => {
     if (activeTab === "log") return t(lang, "sessionLog");
@@ -447,8 +456,8 @@ export default function AppDemoPage({ lang = "en" }) {
       >
         {activeTab === "home" && (
           <HomeTab
-            account={demoAccount}
-            sessions={demoSessions}
+            account={selectedAccount}
+            sessions={filteredSessions}
             onOpenSession={setSelectedSession}
             onGoLog={() => setActiveTab("log")}
             lang={lang}
@@ -457,7 +466,7 @@ export default function AppDemoPage({ lang = "en" }) {
 
         {activeTab === "log" && (
           <LogTab
-            sessions={demoSessions}
+            sessions={filteredSessions}
             onSelect={setSelectedSession}
             lang={lang}
           />
@@ -465,9 +474,11 @@ export default function AppDemoPage({ lang = "en" }) {
 
         {activeTab === "account" && (
           <AccountPanel
-            account={demoAccount}
-            sessions={demoSessions}
+            account={selectedAccount}
+            accounts={demoAccounts}
+            sessions={filteredSessions}
             lang={lang}
+            onSwitchAccount={setSelectedAccountId}
           />
         )}
 

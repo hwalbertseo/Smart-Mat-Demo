@@ -9,6 +9,9 @@ function StatCard({ label, value }) {
         border: "1px solid #e5e7eb",
         borderRadius: 18,
         padding: 14,
+        minWidth: 0,
+        maxWidth: "100%",
+        overflow: "hidden",
       }}
     >
       <div
@@ -17,6 +20,10 @@ function StatCard({ label, value }) {
           color: "#64748b",
           fontWeight: 700,
           marginBottom: 6,
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
         {label}
@@ -27,6 +34,10 @@ function StatCard({ label, value }) {
           fontSize: 22,
           fontWeight: 900,
           color: "#0f172a",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
         {value}
@@ -40,19 +51,28 @@ function SettingRow({ title, subtitle, right }) {
     <div
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "space-between",
         gap: 12,
         padding: "14px 0",
         borderBottom: "1px solid #f1f5f9",
+        minWidth: 0,
+        maxWidth: "100%",
       }}
     >
-      <div>
+      <div
+        style={{
+          flex: "1 1 auto",
+          minWidth: 0,
+        }}
+      >
         <div
           style={{
             fontSize: 14,
             fontWeight: 800,
             color: "#0f172a",
+            minWidth: 0,
+            overflowWrap: "anywhere",
           }}
         >
           {title}
@@ -65,6 +85,8 @@ function SettingRow({ title, subtitle, right }) {
               color: "#64748b",
               marginTop: 3,
               lineHeight: 1.4,
+              minWidth: 0,
+              overflowWrap: "anywhere",
             }}
           >
             {subtitle}
@@ -72,7 +94,13 @@ function SettingRow({ title, subtitle, right }) {
         )}
       </div>
 
-      <div>{right}</div>
+      <div
+        style={{
+          flexShrink: 0,
+        }}
+      >
+        {right}
+      </div>
     </div>
   );
 }
@@ -88,6 +116,7 @@ function FakeToggle({ active = true }) {
         padding: 3,
         display: "flex",
         justifyContent: active ? "flex-end" : "flex-start",
+        flexShrink: 0,
       }}
     >
       <div
@@ -103,26 +132,175 @@ function FakeToggle({ active = true }) {
   );
 }
 
-export default function AccountPanel({ account, sessions = [], lang = "en" }) {
+function DriverSwitchCard({ candidate, active, onClick, lang }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        border: active ? "2px solid #2563eb" : "1px solid #e5e7eb",
+        background: active ? "#eff6ff" : "#ffffff",
+        borderRadius: 18,
+        padding: "12px 14px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: 12,
+        cursor: "pointer",
+        textAlign: "left",
+        transition: "all 0.15s ease",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          flex: "1 1 auto",
+          minWidth: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #2563eb 0%, #38bdf8 100%)",
+            display: "grid",
+            placeItems: "center",
+            color: "#ffffff",
+            fontSize: 16,
+            fontWeight: 900,
+            flexShrink: 0,
+            overflow: "hidden",
+          }}
+        >
+          {candidate?.avatar ? (
+            <img
+              src={candidate.avatar}
+              alt="Driver"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            candidate?.name?.slice(0, 1) ?? "D"
+          )}
+        </div>
+
+        <div
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 900,
+              color: "#0f172a",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {candidate?.name ?? "Driver"}
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              color: "#64748b",
+              marginTop: 3,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {candidate?.email ?? ""}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 800,
+          color: active ? "#2563eb" : "#94a3b8",
+          flexShrink: 0,
+          marginLeft: 4,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {active
+          ? lang === "ko"
+            ? "현재 사용 중"
+            : "Active"
+          : lang === "ko"
+          ? "전환"
+          : "Switch"}
+      </div>
+    </button>
+  );
+}
+
+function SectionCard({ children, padding = 20 }) {
+  return (
+    <section
+      style={{
+        background: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderRadius: 28,
+        padding,
+        boxShadow: "0 16px 35px rgba(15, 23, 42, 0.06)",
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+export default function AccountPanel({
+  account,
+  accounts = [],
+  sessions = [],
+  lang = "en",
+  onSwitchAccount,
+}) {
   const latestSession = getLatestSession(sessions);
   const avgScore = averageScore(sessions);
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <section
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 28,
-          padding: 20,
-          boxShadow: "0 16px 35px rgba(15, 23, 42, 0.06)",
-        }}
-      >
+    <div
+      style={{
+        display: "grid",
+        gap: 18,
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflowX: "hidden",
+      }}
+    >
+      <SectionCard>
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 14,
+            minWidth: 0,
+            maxWidth: "100%",
           }}
         >
           <div
@@ -130,8 +308,7 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
               width: 66,
               height: 66,
               borderRadius: "50%",
-              background:
-                "linear-gradient(135deg, #2563eb 0%, #38bdf8 100%)",
+              background: "linear-gradient(135deg, #2563eb 0%, #38bdf8 100%)",
               display: "grid",
               placeItems: "center",
               color: "#ffffff",
@@ -139,6 +316,7 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
               fontWeight: 900,
               boxShadow: "0 12px 24px rgba(37, 99, 235, 0.22)",
               overflow: "hidden",
+              flexShrink: 0,
             }}
           >
             {account?.avatar ? (
@@ -156,13 +334,22 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
             )}
           </div>
 
-          <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              flex: "1 1 auto",
+              minWidth: 0,
+              overflow: "hidden",
+            }}
+          >
             <div
               style={{
                 fontSize: 20,
                 fontWeight: 900,
                 color: "#0f172a",
                 lineHeight: 1.15,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
               }}
             >
               {account?.name ?? "Demo User"}
@@ -176,7 +363,6 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                maxWidth: 210,
               }}
             >
               {account?.email ?? "demo@solemate.ai"}
@@ -194,23 +380,69 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
                 color: "#1d4ed8",
                 fontSize: 12,
                 fontWeight: 800,
+                maxWidth: "100%",
               }}
             >
               {t(lang, "demoAccount")}
             </div>
           </div>
         </div>
-      </section>
+      </SectionCard>
 
-      <section
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 28,
-          padding: 20,
-          boxShadow: "0 16px 35px rgba(15, 23, 42, 0.06)",
-        }}
-      >
+      <SectionCard>
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 900,
+            color: "#0f172a",
+            marginBottom: 8,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {lang === "ko" ? "드라이버 전환" : "Switch Driver"}
+        </div>
+
+        <div
+          style={{
+            fontSize: 13,
+            color: "#64748b",
+            lineHeight: 1.45,
+            marginBottom: 14,
+            minWidth: 0,
+            overflowWrap: "anywhere",
+          }}
+        >
+          {lang === "ko"
+            ? "공유 차량에서도 빠르게 운전자 프로필을 바꿀 수 있습니다."
+            : "Quickly switch driver profiles for shared vehicle use."}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gap: 10,
+            width: "100%",
+            minWidth: 0,
+          }}
+        >
+          {accounts.map((candidate) => {
+            const active = candidate.id === account?.id;
+
+            return (
+              <DriverSwitchCard
+                key={candidate.id}
+                candidate={candidate}
+                active={active}
+                lang={lang}
+                onClick={() => onSwitchAccount?.(candidate.id)}
+              />
+            );
+          })}
+        </div>
+      </SectionCard>
+
+      <SectionCard>
         <div
           style={{
             display: "flex",
@@ -218,14 +450,21 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
             gap: 16,
             alignItems: "center",
             marginBottom: 14,
+            minWidth: 0,
           }}
         >
-          <div>
+          <div
+            style={{
+              flex: "1 1 auto",
+              minWidth: 0,
+            }}
+          >
             <div
               style={{
                 fontSize: 17,
                 fontWeight: 900,
                 color: "#0f172a",
+                overflowWrap: "anywhere",
               }}
             >
               {t(lang, "personalizedAiModel")}
@@ -237,6 +476,7 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
                 color: "#64748b",
                 marginTop: 4,
                 lineHeight: 1.45,
+                overflowWrap: "anywhere",
               }}
             >
               {t(lang, "fineTunedWithDrivingData")}
@@ -248,6 +488,8 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
               fontSize: 26,
               fontWeight: 900,
               color: "#2563eb",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
             }}
           >
             {account?.modelFineTunePercent ?? 98}%
@@ -278,17 +520,22 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
             fontSize: 13,
             color: "#64748b",
             lineHeight: 1.5,
+            minWidth: 0,
+            overflowWrap: "anywhere",
           }}
         >
           {t(lang, "fineTuneDescription")}
         </p>
-      </section>
+      </SectionCard>
 
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
           gap: 12,
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
         }}
       >
         <StatCard label={t(lang, "totalSessions")} value={sessions.length} />
@@ -303,15 +550,7 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
         />
       </section>
 
-      <section
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 28,
-          padding: "6px 20px",
-          boxShadow: "0 16px 35px rgba(15, 23, 42, 0.06)",
-        }}
-      >
+      <SectionCard padding="6px 20px">
         <SettingRow
           title={t(lang, "drivingAlerts")}
           subtitle={t(lang, "drivingAlertsSubtitle")}
@@ -333,6 +572,8 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
                 fontSize: 13,
                 fontWeight: 800,
                 color: "#2563eb",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {lang === "ko" ? "한국어" : "English"}
@@ -345,7 +586,7 @@ export default function AccountPanel({ account, sessions = [], lang = "en" }) {
           subtitle={t(lang, "dataSyncSubtitle")}
           right={<FakeToggle active />}
         />
-      </section>
+      </SectionCard>
     </div>
   );
 }
